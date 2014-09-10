@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<meta xmlns="http://exist-db.org/xquery/repo">
+    <description>Searchable Documentation Manager</description>
+    <author>G. Mella</author>
+    <website>http://www.jmmc.fr</website>
+    <status>alpha</status>
+    <license>GNU-LGPL</license>
+    <copyright>true</copyright>
+    <type>application</type>
+    <target>docmgr</target>
+    <prepare>pre-install.xql</prepare>
+    <finish/>
+    <deployed>2013-03-28T09:05:25.408+01:00</deployed>
+</meta>
