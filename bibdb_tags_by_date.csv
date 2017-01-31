@@ -1,0 +1,18 @@
+xquery version "3.0";
+
+import module namespace app="http://apps.jmmc.fr/exist/apps/docmgr/templates" at "modules/app.xql";
+
+import module namespace config="http://apps.jmmc.fr/exist/apps/docmgr/config" at "modules/config.xqm";
+ 
+declare option exist:serialize "method=text media-type=text/csv";
+
+let $pubs := $app:olbindoc//e
+let $tags := $app:olbindoc//tag[@id]
+return
+    let $header := string-join(("date", for $tag in $tags return "&quot;"||data($tag)||"&quot;"), ",")
+    let $data := for $p in $pubs group by $date:=substring($p/bibcode,1,4) order by $date         
+        return string-join(
+                    ($date,for $tag in $tags return count($p//tag[.=$tag])),
+                    ","
+                )
+    return string-join( ($header, $data, ""), "&#10;")
