@@ -288,7 +288,7 @@ declare function app:dbList($node as node(), $model as map(*)) {
                 let $bibcode:=$e/bibcode
                 let $record:=ads:getRecord($bibcode)
                 let $a := ads:hasPdfInCache($bibcode)                
-                let $linkurl := replace($record//ads:link[@type="ARTICLE"]/ads:url/text(),"cdsads.u-strasbg.fr","cdsads.u-strasbg.fr.gaelnomade.ujf-grenoble.fr")
+                let $linkurl := replace($record//ads:link[@type="ARTICLE"]/ads:url/text(),"cdsads.u-strasbg.fr","cdsads.u-strasbg.fr.gaelnomade-1.grenet.fr")
                 return if($a) then () else if ($linkurl) then "curl --cookie nada -L -o &quot;"||$bibcode||".pdf&quot; &quot;"||$linkurl||"&quot;"  else ()  
                 ) ,"&#10;")
         }    
@@ -357,7 +357,7 @@ declare function app:form($node as node()*, $model as map(*), $query as xs:strin
                     </label>
             }            
             <br/>
-            <input id="query" type="text" size="120" value="{$query}" name="query" class="search-query templates:form-control"/>
+            <input id="query" type="text" size="400" value="{$query}" name="query" class="search-query templates:form-control input-xxlarge"/>
             <a href="http://lucene.apache.org/core/3_6_0/queryparsersyntax.html"> ? </a>
             <button class="btn" type="submit">Query</button>
         </form>
@@ -503,7 +503,7 @@ let $res := <div>
     
     <pre>not in olbin :{count($notInOidb_bibcodes)}
     in olbin : {count($inOidb_bibcodes)}</pre>
-    In olbin but not tagged:<ol>{for $m in $missing_bibcodes order by $m descending return <li><a href="http://apps.jmmc.fr/bibdb/manageJmmc?#ANCHOR_{$m}">{$m/text()}</a></li>}</ol>
+    In olbin but not tagged:<ol>{for $m in $missing_bibcodes order by $m descending return <li><a href="http://apps.jmmc.fr/bibdb/updatePubs.php?filter={$m}">{$m/text()}</a></li>}</ol>
     Not in olbin:<br/>
     <ol>
         {for $m in $notInOidb_bibcodes order by $m descending return <li>{if ( $m=$app:black-bibcodes) then <strike>{$m}</strike> else $m}</li>}</ol>
@@ -585,14 +585,17 @@ declare function ads:hasPdfInCache($bibcode as xs:string) {
                 , 1,1)/ads:url/text() 
     :)
     
+    
     let $openUrl := if( false()) then $record//ads:link[@type="ARTICLE" and @access="open"]/ads:url/text() else ()
     let $arxivUrl := if( true() ) then $record//ads:link[@type="PREPRINT"]/ads:url/text() else ()
 
     (:
     next code try to get pdf and store them in db but fails
     :)
-    let $available := if ( $available ) then $available                    
+    let $available := try {
+        if ( $available ) then $available                    
         else if ($openUrl) then            
+            let $log := util:log("error", <p>retrieving {$openUrl}</p>)
             let $test:=string(doc($openUrl)//*[@name="citation_pdf_url"]/@content)
             let $log := util:log("error", <p>retrieving {$openUrl} ({$test})</p>)
             let $openUrl := if($test) then $test else $openUrl
@@ -601,6 +604,7 @@ declare function ads:hasPdfInCache($bibcode as xs:string) {
             let $update := if($store) then update insert <a href="{$openUrl}">pdf retrieved on {current-dateTime()} for {$bibcode} : {$store} </a> into $config:ads-cache-doc/cache else util:log("error", <p>pdf not retrieved for {$bibcode} </p>)              
                 return util:binary-doc-available($openDatastore||$filename)          
         else if ($arxivUrl) then
+            let $log := util:log("error", <p>retrieving {$arxivUrl}</p>)
             let $pdfUrl:=string(doc($arxivUrl)//*[@name="citation_pdf_url"]/@content)
             let $log := util:log("error", <p>retrieving {$arxivUrl} / {$pdfUrl} </p>)
             let $pdf := httpclient:get( xs:anyURI($pdfUrl), false(), () )/httpclient:body/text() 
@@ -610,7 +614,12 @@ declare function ads:hasPdfInCache($bibcode as xs:string) {
         else
             ()
             (:util:log("error", <p>Sorry can't retrieve pdf for {$bibcode} : {count(collection($config:data-root)//ads:record[ads:bibcode=$bibcode])}</p>):)
-
+    
+    } catch * {
+        let $log := util:log("error", <p>can't retrieve ' {$openUrl} {$arxivUrl}'</p>)
+        return
+        ()
+    }
     (: :) 
   
   return $available
@@ -638,7 +647,33 @@ declare function app:manage($node as node()*, $model as map(*), $action as xs:st
     if($action) then 
        <div>{app:manageAction($action, $bibcode, $tag)}</div>
     else        
-        <div> 
+        <div>
+            Here comes the missing tags onto olbin mysql db:
+            <pre>
+                INSERT INTO tagsofbibs (bibcode, tag_id) VALUES 
+            {
+                for $e in $config:docmgr-tags-doc//e                 
+                let $t := $e/tag
+                let $b := $e/bibcode
+                let $ti := data($app:olbindoc//tag[text()=$t and @id]/@id)
+                order by $e/bibcode
+                return 
+                    if( $app:olbindoc//e[bibcode=$b and tag=$t] ) then ()
+                    else "('" || $b || "', '" || $ti || "'), "
+
+            }
+            {
+                let $jmmc-tag-id := data($app:olbindoc//tag[text()='JMMC' and @id]/@id)
+                let $tagged-by-soft-but-not-jmmc := $app:olbindoc//e[tag=$app:jmmctags and not(tag="JMMC")]/bibcode
+                for $e in $tagged-by-soft-but-not-jmmc 
+                    return "('" || $e || "', '" || $jmmc-tag-id || "'), "
+            };      
+            </pre>
+            
+            
+            
+             
+            
             Here comes the referenced publications:
             <ul>
             {            
@@ -653,6 +688,9 @@ declare function app:manage($node as node()*, $model as map(*), $action as xs:st
                     )
             }
             </ul>
+            
+          
+            
             
         {
             let $es := $config:docmgr-tags-doc//e
@@ -724,7 +762,7 @@ declare function app:jmmc-list($node as node()*, $model as map(*))
     let $olbin-bibcodes := distinct-values($app:olbindoc//bibcode)
     
     (: next section notify and update docmgr-tags-doc from the selection provided on the olbin web site :)
-    let $top := if ( false() ) then <table>
+    let $top := if ( true() ) then <table>
         { for $tag in $tags
         let $olbin-bibcodes := $app:olbindoc//e[tag=$tag]/bibcode
         let $tagged-bibcodes := $config:docmgr-tags-doc//e[tag=$tag]/bibcode
@@ -732,13 +770,13 @@ declare function app:jmmc-list($node as node()*, $model as map(*))
         let $update := for $bibcode in data($to-store) return update insert   <e><bibcode>{$bibcode}</bibcode><tag>{$tag}</tag><date>{current-dateTime()}</date>
                                 {jmmc-auth:getInfo()}
                             </e> into $config:docmgr-tags-doc/tags
-        return
+        return if( $to-store) then
         <tr>
             <td> added for <b>{$tag}</b></td>
             <td>
                 { string-join( $to-store , ", " ) }
             </td>
-        </tr>
+        </tr>else ()
         }
         </table>
         else ()
