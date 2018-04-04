@@ -21,13 +21,20 @@ declare variable $app:category := ("jmmc","olbin");
 declare variable $app:jmmcdoc := doc("http://www.jmmc.fr/doc/documentation.xml");
 declare variable $app:telbib-url := "http://telbib.eso.org/api.php?telescope[]=vlti+visitor&amp;telescope[]=vlti";
 
-declare variable $app:olbindoc := doc("http://jmmc.fr/bibdb/xml");
+declare variable $app:olbindoc := doc("http://jmmc.fr/~mellag/bibdb/xml2");
 declare variable $app:arxiv-for-olbin-doc := doc($config:data-root||"/arxiv-for-olbin.xml");
 
 (: declare variable $app:jmmc-info := () :)
 declare variable $app:jmmctags := ("Aspro", "Amdlib", "SearchCal", "JSDC", "LITpro", "Wisard","MidiDRS", "PNDRS", 'oidb', 'OIFitsExplorer');
 
-declare variable $app:black-bibcodes := ( '2006ApJ...649..299G', '2007A&amp;A...472..207F', '2007NewAR..51..617B', '2007NewAR..51..623D', '2008AstL...34..753K', '2011A&amp;A...534A.125U', '2011PASA...28..323W', '2012AJ....143..135V', '2013AN....334..912G', '2013ApJ...771..130C', '2013ApJS..208....9P', '2013PASJ...65L...9U', '2013PhDT.......306B', '2014A&amp;A...563A..86L', '2014A&amp;A...566A.124L', '2014A&amp;A...566A..67L', '2014ApJS..211...25C', '2014Icar..231..338M', '2015A&amp;A...573A.138B', '2015A&amp;A...580A..78P', '2015ApJ...798...87M' );
+declare variable $app:black-bibcodes := ( '2006ApJ...649..299G', '2013AN....334..912G', '2014Icar..231..338M' (: reported by telbib but not considered as refereed by AChelli :)
+,'2007A&amp;A...472..207F', '2007NewAR..51..617B', '2007NewAR..51..623D'
+(: cleanup non-interfero :)
+); 
+
+declare variable $app:jmmc-non-interfero-bibcodes := (  '2008AstL...34..753K', '2011A&amp;A...534A.125U', '2011PASA...28..323W', '2012AJ....143..135V', '2013ApJ...771..130C', '2013ApJS..208....9P', '2013PASJ...65L...9U', '2013PhDT.......306B', '2014A&amp;A...563A..86L', '2014A&amp;A...566A.124L', '2014A&amp;A...566A..67L', '2014ApJS..211...25C', '2015A&amp;A...573A.138B', '2015A&amp;A...580A..78P', '2015ApJ...798...87M', '2017AJ....153...39C', "2016ApJ...830...46F","2016ApJ...824..121D","2016ApJ...822...97H", '2016A&amp;A...593L..18C' );
+
+
 
 (: todo check if missing bibcodes are refereed papers :)
 declare function app:telbib-xmatch($node as node(), $model as map(*)) {
@@ -357,7 +364,7 @@ declare function app:form($node as node()*, $model as map(*), $query as xs:strin
                     </label>
             }            
             <br/>
-            <input id="query" type="text" size="400" value="{$query}" name="query" class="search-query templates:form-control input-xxlarge"/>
+            <input id="query" type="text" size="120" value="{$query}" name="query" class="search-query templates:form-control input-xxlarge"/>
             <a href="http://lucene.apache.org/core/3_6_0/queryparsersyntax.html"> ? </a>
             <button class="btn" type="submit">Query</button>
         </form>
@@ -467,7 +474,9 @@ declare function app:doReport($node as node()*, $model as map(*)){
   let $in2 := "2010SPIE.7734E..4EL,2010SPIE.7734E..84L,2010SPIE.7734E..83M,2012ASPC..461..379L,2011ASPC..442..489D,2010SPIE.7734E.107M,2012yCat..74140108B,2011MNRAS.414..108B,2010SPIE.7734E.138M,2011Msngr.145....7W,2010yCat.2300....0L,2011A&amp;A...535A..53B,2010SPIE.7734E.140L,2012SPIE.8445E..3FM,"
   (: 2012A&amp;ARv..20...53B,2011A&amp;A...533A..64R :)
   (: let $in := "2012A&amp;ARv..20...53B,2010SPIE.7734E.140L,2006A&amp;A...456..789B" :)
-  let $in3 := ("2017yCat.2346....0B", "2016SPIE.9907E..28M", "2016SPIE.9907E..11B", "2016SPIE.9907E..3VH", "2016A&amp;A...589A.112C")
+  let $in3 := ("2017yCat.2346....0B", "2016SPIE.9907E..28M", "2016SPIE.9907E..11B", "2016SPIE.9907E..3VH", "2016A&amp;A...589A.112C"
+  ,'2008SPIE.7013E..1JT'
+  )
   
   let $bibcodes := for $e in distinct-values(( tokenize($in||","|| $in2,","), $in3)) where $e order by $e descending return $e
   
@@ -476,8 +485,11 @@ declare function app:doReport($node as node()*, $model as map(*)){
 let $list := <l>
 {
 for $b in $bibcodes
-let $adsUri := xs:anyURI( concat($config:ads-ref_query-url, "bibcode=",encode-for-uri($b),"&amp;refs=REFCIT"))
 return
+    try {
+    let $adsUri := xs:anyURI( concat($config:ads-ref_query-url, "bibcode=",encode-for-uri($b),"&amp;refs=REFCIT"))
+    let $log := util:log("info", $adsUri)
+    return    
 <e>  
   <bibcode>{$b}</bibcode>  
     {     
@@ -490,38 +502,56 @@ return
        } 
   <br/>
 </e>
+
+        } catch * {
+        ()
+        }
 }
 </l>
+
 
 let $list_bibcodes := for $e in distinct-values($list//r/bibcode/text()) order by $e return normalize-space($e)
 let $bibdb_bibcodes := for $e in distinct-values($app:olbindoc//bibcode/text()) order by $e return normalize-space(replace($e, "%26", "&amp;"))
 let $inOidb_bibcodes := distinct-values($list_bibcodes[.=$bibdb_bibcodes])
-let $notInOidb_bibcodes := distinct-values($list_bibcodes[not(.=$bibdb_bibcodes)])
+let $notInOidb_bibcodes := distinct-values($list_bibcodes[not(.=$bibdb_bibcodes) and not(.=$app:jmmc-non-interfero-bibcodes) and not(.=$app:black-bibcodes)])
+let $notInOidb_bibcodes := for $e in $notInOidb_bibcodes order by $e descending return $e
 
 let $missing_bibcodes := $app:olbindoc//e[not(tag="JMMC") and bibcode=$inOidb_bibcodes]/bibcode
-let $res := <div>
-    
-    <pre>not in olbin :{count($notInOidb_bibcodes)}
-    in olbin : {count($inOidb_bibcodes)}</pre>
-    In olbin but not tagged:<ol>{for $m in $missing_bibcodes order by $m descending return <li><a href="http://apps.jmmc.fr/bibdb/updatePubs.php?filter={$m}">{$m/text()}</a></li>}</ol>
+let $res := 
+    <div>
+    { if ($missing_bibcodes) then
+        <pre>In olbin but not tagged:<ol>{for $m in $missing_bibcodes order by $m descending return <li><a href="http://apps.jmmc.fr/bibdb/updatePubs.php?filter={$m}">{$m/text()}</a></li>}</ol></pre>
+        else ()
+    }
     Not in olbin:<br/>
-    <ol>
-        {for $m in $notInOidb_bibcodes order by $m descending return <li>{if ( $m=$app:black-bibcodes) then <strike>{$m}</strike> else $m}</li>}</ol>
+    <ol>{for $m in $notInOidb_bibcodes  return <li>{$m}</li>}</ol>    
     
-    <ul>{
+    <h2>Citation references</h2>
+    <ul>{   
         for $e in $list/e return 
-            <li><a href="{ads:getAdsUrl($e/bibcode)}">citations of <em>{$e/bibcode/text()}</em></a><br/>
+            <li>{jmmc-ads:get-html(jmmc-ads:get-records($e/bibcode)[1],3)}
+                <!--<a href="{ads:getAdsUrl($e/bibcode)}">citations of <em>{$e/bibcode/text()}</em></a><br/>-->
                 <ol>{
-                    for $r in $e//r                    
-                    let $class := if($r/bibcode=$bibdb_bibcodes) then if($r/bibcode=$missing_bibcodes) then "alert-error" else "alert-success" else ()
-                    return <li class="{$class}">{$r/bibcode/text()}&#160; <a href="{ads:getAdsUrl($r/bibcode)}">{$r/title/text()}</a></li>                            
+                    for $r in $e/r    
+                    let$b := $r/bibcode/text()
+                    let $class := if ($b=$app:jmmc-non-interfero-bibcodes) then 'text-info' else if($b=$bibdb_bibcodes) then if($b=$missing_bibcodes) then "alert-error" else "alert-success" else ()
+                    return <li class="{$class}">{$b}&#160; <a href="{ads:getAdsUrl($b)}">
+                        {if ( $b=$app:black-bibcodes) then <s>{$r/title/text()}</s> else $r/title/text()
+                        }</a></li>                            
+        
                 }</ol>
             </li>                
+        
+
     }</ul>
     
-    {jmmc-ads:get-html(jmmc-ads:get-records($notInOidb_bibcodes),100)}
-    
+    {
+        if (exists($notInOidb_bibcodes)) then
+        <div><h1> To fix! </h1> <ul>{ for $e in jmmc-ads:get-html(jmmc-ads:get-records($notInOidb_bibcodes),100) return <li>{$e}</li> }</ul></div>
+        else ()
+    }
     </div>
+    
 return $res    
 };
 
@@ -587,15 +617,13 @@ declare function ads:hasPdfInCache($bibcode as xs:string) {
     
     
     let $openUrl := if( false()) then $record//ads:link[@type="ARTICLE" and @access="open"]/ads:url/text() else ()
-    let $arxivUrl := if( true() ) then $record//ads:link[@type="PREPRINT"]/ads:url/text() else ()
+    let $arxivUrl := if( false() ) then $record//ads:link[@type="PREPRINT"]/ads:url/text() else ()
 
     (:
     next code try to get pdf and store them in db but fails
     :)
-    let $available := try {
-        if ( $available ) then $available                    
+    let $available := if ( $available ) then $available                    
         else if ($openUrl) then            
-            let $log := util:log("error", <p>retrieving {$openUrl}</p>)
             let $test:=string(doc($openUrl)//*[@name="citation_pdf_url"]/@content)
             let $log := util:log("error", <p>retrieving {$openUrl} ({$test})</p>)
             let $openUrl := if($test) then $test else $openUrl
@@ -604,7 +632,6 @@ declare function ads:hasPdfInCache($bibcode as xs:string) {
             let $update := if($store) then update insert <a href="{$openUrl}">pdf retrieved on {current-dateTime()} for {$bibcode} : {$store} </a> into $config:ads-cache-doc/cache else util:log("error", <p>pdf not retrieved for {$bibcode} </p>)              
                 return util:binary-doc-available($openDatastore||$filename)          
         else if ($arxivUrl) then
-            let $log := util:log("error", <p>retrieving {$arxivUrl}</p>)
             let $pdfUrl:=string(doc($arxivUrl)//*[@name="citation_pdf_url"]/@content)
             let $log := util:log("error", <p>retrieving {$arxivUrl} / {$pdfUrl} </p>)
             let $pdf := httpclient:get( xs:anyURI($pdfUrl), false(), () )/httpclient:body/text() 
@@ -614,12 +641,7 @@ declare function ads:hasPdfInCache($bibcode as xs:string) {
         else
             ()
             (:util:log("error", <p>Sorry can't retrieve pdf for {$bibcode} : {count(collection($config:data-root)//ads:record[ads:bibcode=$bibcode])}</p>):)
-    
-    } catch * {
-        let $log := util:log("error", <p>can't retrieve ' {$openUrl} {$arxivUrl}'</p>)
-        return
-        ()
-    }
+
     (: :) 
   
   return $available
@@ -647,33 +669,7 @@ declare function app:manage($node as node()*, $model as map(*), $action as xs:st
     if($action) then 
        <div>{app:manageAction($action, $bibcode, $tag)}</div>
     else        
-        <div>
-            Here comes the missing tags onto olbin mysql db:
-            <pre>
-                INSERT INTO tagsofbibs (bibcode, tag_id) VALUES 
-            {
-                for $e in $config:docmgr-tags-doc//e                 
-                let $t := $e/tag
-                let $b := $e/bibcode
-                let $ti := data($app:olbindoc//tag[text()=$t and @id]/@id)
-                order by $e/bibcode
-                return 
-                    if( $app:olbindoc//e[bibcode=$b and tag=$t] ) then ()
-                    else "('" || $b || "', '" || $ti || "'), "
-
-            }
-            {
-                let $jmmc-tag-id := data($app:olbindoc//tag[text()='JMMC' and @id]/@id)
-                let $tagged-by-soft-but-not-jmmc := $app:olbindoc//e[tag=$app:jmmctags and not(tag="JMMC")]/bibcode
-                for $e in $tagged-by-soft-but-not-jmmc 
-                    return "('" || $e || "', '" || $jmmc-tag-id || "'), "
-            };      
-            </pre>
-            
-            
-            
-             
-            
+        <div> 
             Here comes the referenced publications:
             <ul>
             {            
@@ -688,9 +684,6 @@ declare function app:manage($node as node()*, $model as map(*), $action as xs:st
                     )
             }
             </ul>
-            
-          
-            
             
         {
             let $es := $config:docmgr-tags-doc//e
@@ -764,31 +757,31 @@ declare function app:jmmc-list($node as node()*, $model as map(*))
     (: next section notify and update docmgr-tags-doc from the selection provided on the olbin web site :)
     let $top := if ( true() ) then <table>
         { for $tag in $tags
-        let $olbin-bibcodes := $app:olbindoc//e[tag=$tag]/bibcode
-        let $tagged-bibcodes := $config:docmgr-tags-doc//e[tag=$tag]/bibcode
-        let $to-store := $olbin-bibcodes[not(.=$tagged-bibcodes)]
-        let $update := for $bibcode in data($to-store) return update insert   <e><bibcode>{$bibcode}</bibcode><tag>{$tag}</tag><date>{current-dateTime()}</date>
-                                {jmmc-auth:getInfo()}
-                            </e> into $config:docmgr-tags-doc/tags
-        return if( $to-store) then
-        <tr>
-            <td> added for <b>{$tag}</b></td>
-            <td>
-                { string-join( $to-store , ", " ) }
-            </td>
-        </tr>else ()
+            let $olbin-bibcodes := $app:olbindoc//e[tag=$tag]/bibcode
+            let $tagged-bibcodes := $config:docmgr-tags-doc//e[tag=$tag]/bibcode
+            let $to-store := $olbin-bibcodes[not(.=$tagged-bibcodes)]
+            let $update := for $bibcode in data($to-store) 
+                            return update insert <e><bibcode>{$bibcode}</bibcode><tag>{$tag}</tag><date>{current-dateTime()}</date> {jmmc-auth:getInfo()}</e> into $config:docmgr-tags-doc/tags
+            where exists($to-store)                
+            return
+                <tr><td> added for <b>{$tag}</b></td><td>{ string-join( $to-store , ", " ) }</td></tr>
         }
         </table>
         else ()
         
-    let $header := <div id="toc"><ul class="list-inline inline">{
+    let $header := <div id="toc"><ul class="list-inline inline">
+        {
             for $by_tag in $config:docmgr-tags-doc//e group by $tag := $by_tag/tag order by $tag
                 return <li><a href="#{$tag/text()}"> {$tag/text()} ({count($by_tag/bibcode)}) </a>    </li>
-        }        
-        </ul></div>    
+        }       
         
-    let $data := for $by_tag in $config:docmgr-tags-doc//e group by $tag := $by_tag/tag  order by $tag
-    return <div>
+        </ul>
+        <a href="#non-interferometric-refcit"> Non interferometric papers citing JMMC products ({count($app:jmmc-non-interfero-bibcodes)})</a>    
+        </div>    
+        
+    let $data := (
+        for $by_tag in $config:docmgr-tags-doc//e group by $tag := $by_tag/tag  order by $tag
+        return <div>
             <h3 id="{$tag/text()}">{$tag/text()} ({count($by_tag/bibcode)}) <a href="#toc"><span class="glyphicon glyphicon-chevron-up  icon-arrow-up" /></a></h3>
             <table class="table table-condensed">
             {               
@@ -801,7 +794,14 @@ declare function app:jmmc-list($node as node()*, $model as map(*))
                     <tr><td>{if($olbin-bibcodes = $bib) then () else <span class="glyphicon glyphicon-chevron-up  icon-arrow-up"></span>}{jmmc-ads:get-html($r,4)}</td></tr>
                
             }
-            </table>
-        </div>
+            </table>                            
+        </div>,
+        <div>
+                <h3 id="non-interferometric-refcit"> Non interferometric papers citing JMMC products ({count($app:jmmc-non-interfero-bibcodes)}) <a href="#toc"><span class="glyphicon glyphicon-chevron-up  icon-arrow-up" /></a></h3>            
+                <ul>{
+                    for $e in $app:jmmc-non-interfero-bibcodes order by substring($e,1,4) descending 
+                    return <li>{jmmc-ads:get-html(jmmc-ads:get-records($e)[1],3) }</li>
+                }</ul>
+    </div>)
         return ($top, $header, $data)
 };
